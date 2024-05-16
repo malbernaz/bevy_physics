@@ -10,7 +10,7 @@ pub fn setup_camera(mut commands: Commands) {
         projection: OrthographicProjection {
             far: 1000.,
             near: -1000.,
-            scale: 1.,
+            scale: 0.5,
             ..default()
         },
         ..default()
@@ -23,11 +23,8 @@ pub fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>) {
     let tile_size = TilemapTileSize { x: 8.0, y: 8.0 };
     let grid_size = tile_size.into();
     let map_type = TilemapType::default();
-    let mut map_transform = get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0);
-    map_transform.translation.y = -176.;
     let tilemap_entity = commands.spawn(Name::new("TileMap")).id();
     let mut tile_storage = TileStorage::empty(map_size);
-    let map_width = map_size.x as f32 * tile_size.x;
 
     for x in 0..map_size.x {
         for y in 0..map_size.y {
@@ -48,9 +45,18 @@ pub fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>) {
         }
     }
 
-    commands
-        .entity(tilemap_entity)
-        .insert(TilemapBundle {
+    let mut map_transform = get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0);
+    map_transform.translation.y = -176.;
+    let collider = Collider::new(
+        Vec2::new(0., -176.),
+        Vec2::new(
+            map_size.x as f32 * tile_size.x / 2.,
+            map_size.y as f32 * tile_size.y / 2.,
+        ),
+    );
+
+    commands.entity(tilemap_entity).insert((
+        TilemapBundle {
             grid_size,
             map_type,
             size: map_size,
@@ -59,13 +65,9 @@ pub fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>) {
             tile_size,
             transform: map_transform,
             ..default()
-        })
-        .with_children(|builder| {
-            builder.spawn((
-                SolidBundle::new(Collider::new(map_width, tile_size.y)),
-                Transform::from_xyz(0., -176., 0.),
-            ));
-        });
+        },
+        SolidBundle::new(collider),
+    ));
 }
 
 pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {

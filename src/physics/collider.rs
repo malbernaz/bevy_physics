@@ -1,22 +1,36 @@
-use bevy::prelude::*;
+use bevy::{
+    math::bounding::{Aabb2d, BoundingVolume},
+    prelude::*,
+};
+
+use super::actor::Actor;
 
 #[derive(Component)]
 pub struct Collider {
-    pub rect: Rectangle,
+    pub rect: Aabb2d,
 }
 
 impl Collider {
-    pub fn new(width: f32, height: f32) -> Self {
+    pub fn new(center: Vec2, half_size: Vec2) -> Self {
         Self {
-            rect: Rectangle::new(width, height),
+            rect: Aabb2d::new(center, half_size),
         }
     }
-}
 
-pub fn draw_gizmos(mut gizmos: Gizmos, query: Query<(&Transform, &Collider)>) {
-    for (transform, collider) in &mut query.iter() {
-        let translation = transform.translation.xy();
-        gizmos.primitive_2d(collider.rect, translation, 0., Color::rgb(0., 1., 0.));
+    pub fn update_rect(&mut self, center: Vec2) {
+        self.rect = Aabb2d::new(center, self.rect.half_size());
     }
 }
 
+pub fn update_rect(mut gizmos: Gizmos, mut query: Query<(&mut Collider, &Transform), With<Actor>>) {
+    for (mut collider, transform) in &mut query {
+        collider.update_rect(transform.translation.xy());
+
+        gizmos.primitive_2d(
+            Rectangle::from_corners(collider.rect.min, collider.rect.max),
+            collider.rect.center(),
+            0.,
+            Color::rgb(0., 1., 0.),
+        );
+    }
+}

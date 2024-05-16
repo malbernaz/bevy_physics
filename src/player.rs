@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{math::bounding::Aabb2d, prelude::*};
 
 use crate::physics::{actor::*, collider::*, solid::*};
 
@@ -28,33 +28,36 @@ impl PlayerBundle {
             ..default()
         };
 
+        let pos = sprite.transform.translation.xy();
+        let collider = Collider::new(pos, Vec2::new(8. / 2., 16. / 2.));
+
         Self {
             sprite,
             name: Name::new("Player"),
             player: Player::default(),
-            actor: ActorBundle::new(Collider::new(8., 16.)),
+            actor: ActorBundle::new(collider),
         }
     }
 }
 
-pub fn get_input_axis(input: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
-    let positive = if input.pressed(positive) { 1. } else { 0. };
-    let negative = if input.pressed(negative) { 1. } else { 0. };
-    positive - negative
+pub fn get_input_axis(keys: &ButtonInput<KeyCode>, pos: KeyCode, neg: KeyCode) -> f32 {
+    let pos = if keys.pressed(pos) { 1. } else { 0. };
+    let neg = if keys.pressed(neg) { 1. } else { 0. };
+    pos - neg
 }
 
-pub fn approach(from: f32, to: f32, delta: f32) -> f32 {
-    if from < to {
-        return to.min(from + delta);
+pub fn approach(value: f32, target: f32, delta: f32) -> f32 {
+    if value > target {
+        return target.max(value - delta);
     }
-
-    to.max(from - delta)
+    target.min(value + delta)
 }
 
-const SPEED: f32 = 300.;
-const ACC: f32 = 10.;
-const GRAVITY: f32 = 9.;
+const SPEED: f32 = 200.;
+const ACC: f32 = 8.;
+const GRAVITY: f32 = 10.;
 const FALL_SPEED: f32 = -1000.;
+const JUMP_SPEED: f32 = 200.;
 
 pub fn movement(time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, mut player: Query<&mut Player>) {
     let Ok(mut player) = player.get_single_mut() else {
@@ -65,154 +68,109 @@ pub fn movement(time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, mut player: Qu
 
     let delta = time.delta_seconds();
 
+    // println!("{:?} {:?} {:?}", player.speed.x, SPEED * axis, ACC * delta);
     player.speed.x = approach(player.speed.x, SPEED * axis * delta, ACC * delta);
     player.speed.y = approach(player.speed.y, FALL_SPEED * delta, GRAVITY * delta);
 
     if keys.pressed(KeyCode::KeyC) {
-        player.speed.y = 300. * delta;
+        player.speed.y = JUMP_SPEED * delta;
     }
 }
 
 pub fn collision_system(
     mut player: Query<(&mut Transform, &mut Player, &Collider), With<Player>>,
-    mut solids: Query<(&Transform, &Collider), (With<Solid>, Without<Player>)>,
+    mut solids: Query<&Collider, (With<Solid>, Without<Player>)>,
 ) {
     let Ok((mut p_transform, mut player, p_collider)) = player.get_single_mut() else {
         return;
     };
 
-    let mut amount = player.speed.round();
+    let speed = player.speed.round();
 
-    for (s_transform, s_collider) in &mut solids {
-        let p_pos = p_transform.translation.xy();
-        let s_pos = s_transform.translation.xy();
+    for s_collider in &mut solids {
+        let Some((e1, e2)) = get_toc_entries(&p_collider.rect, &s_collider.rect, speed) else {
+            p_transform.translation.x += speed.x;
+            p_transform.translation.y += speed.y;
+            continue;
+        };
 
-        if let Some(col) = collide(
-            p_pos + amount,
-            p_collider.rect.half_size,
-            s_pos,
-            s_collider.rect.half_size,
-        ) {
-            println!("{:?}", col);
-            // amount.x = 0.;
-            player.speed.x = 0.;
-            amount.y = (col.y - p_collider.rect.half_size.y) * amount.y.signum();
+        let toc = e1.max(e2);
+        let collision_axis = collision_direction(e1, e2, speed);
+
+        if collision_axis.y != 0. {
+            p_transform.translation.x += speed.x;
+            p_transform.translation.y += speed.y * toc;
             player.speed.y = 0.;
-            // p_transform.translation.y += (col.y - p_collider.rect.half_size.y) * amount.y.signum();
+        }
+
+        if collision_axis.x != 0. {
+            p_transform.translation.y += speed.y;
+            p_transform.translation.x += speed.x * toc;
+            player.speed.x = 0.;
+        }
+    }
+}
+
+/// get time of collision entries
+fn get_toc_entries(a: &Aabb2d, s: &Aabb2d, speed: Vec2) -> Option<(f32, f32)> {
+    let (x_entry, x_exit) = if speed.x > 0.0 {
+        ((s.min.x - a.max.x) / speed.x, (s.max.x - a.min.x) / speed.x)
+    } else if speed.x < 0.0 {
+        ((s.max.x - a.min.x) / speed.x, (s.min.x - a.max.x) / speed.x)
+    } else {
+        (f32::NEG_INFINITY, f32::INFINITY)
+    };
+
+    let (y_entry, y_exit) = if speed.y > 0.0 {
+        ((s.min.y - a.max.y) / speed.y, (s.max.y - a.min.y) / speed.y)
+    } else if speed.y < 0.0 {
+        ((s.max.y - a.min.y) / speed.y, (s.min.y - a.max.y) / speed.y)
+    } else {
+        (f32::NEG_INFINITY, f32::INFINITY)
+    };
+
+    let entry_time = x_entry.max(y_entry);
+    let exit_time = x_exit.min(y_exit);
+
+    if entry_time > exit_time || entry_time < 0.0 || entry_time > 1.0 {
+        None
+    } else {
+        Some((x_entry, y_entry))
+    }
+}
+
+fn collision_direction(x_entry: f32, y_entry: f32, speed: Vec2) -> Vec2 {
+    if x_entry > y_entry {
+        if speed.x > 0.0 {
+            Vec2 { x: 1.0, y: 0.0 } // Collision on the positive X axis
         } else {
-            p_transform.translation.x += amount.x;
-            // println!("{:?}", p_transform.translation);
+            Vec2 { x: -1.0, y: 0.0 } // Collision on the negative X axis
         }
-
-        // if let Some(collision) = collide(
-        //     Vec2::new(0., p_pos.x + amount.x),
-        //     p_collider.rect.half_size,
-        //     s_pos,
-        //     s_collider.rect.half_size,
-        // ) {
-        //     // if collision.y != 0. {
-        //     //     amount.y = 0.;
-        //     // }
-        // } else {
-        //     p_transform.translation.y += amount.y;
-        // }
-
-        // if let Some((y, _collision)) = move_y(amount.y, |sign| {
-        //     collide(
-        //         Vec2::new(0., p_pos.y + sign),
-        //         p_collider.rect.half_size,
-        //         s_pos,
-        //         s_collider.rect.half_size,
-        //     )
-        // }) {
-        //     println!("{:?} {:?}", y, amount.y);
-        //     amount.y = 0.;
-        //     player.speed.y = 0.;
-        // } else {
-        //     p_transform.translation.y += amount.y;
-        // }
-    }
-    // println!("{:?}", amount.y);
-    p_transform.translation.y += amount.y;
-}
-
-pub fn move_y(amount: f32, collides_at: impl Fn(f32) -> Option<Vec2>) -> Option<(f32, Vec2)> {
-    let mut y = amount.round() as i32;
-
-    if y == 0 {
-        let sign = y.signum();
-
-        while y != 0 {
-            let collision = collides_at(y as f32);
-
-            if collision.is_none() {
-                y -= sign;
-            } else {
-                return Some((y as f32, collision.unwrap()));
-            }
-        }
-    }
-
-    return None;
-}
-
-struct Hit {
-    pub direction: Vec2,
-}
-
-impl Default for Hit {
-    fn default() -> Self {
-        Self {
-            direction: Vec2::ZERO,
+    } else {
+        if speed.y > 0.0 {
+            Vec2 { x: 0.0, y: 1.0 } // Collision on the positive Y axis
+        } else {
+            Vec2 { x: 0.0, y: -1.0 } // Collision on the negative Y axis
         }
     }
 }
 
-impl Hit {
-    pub fn new(direction: Vec2) -> Self {
-        Self { direction }
-    }
+// pub fn move_y(amount: f32, collides_at: impl Fn(f32) -> Option<Vec2>) -> Option<(f32, Vec2)> {
+//     let mut y = amount.round() as i32;
 
-    pub fn is_hit_left(&self) -> bool {
-        self.direction.x < 0.
-    }
+//     if y == 0 {
+//         let sign = y.signum();
 
-    pub fn is_hit_right(&self) -> bool {
-        self.direction.x > 0.
-    }
+//         while y != 0 {
+//             let collision = collides_at(y as f32);
 
-    pub fn is_hit_up(&self) -> bool {
-        self.direction.y < 0.
-    }
+//             if collision.is_none() {
+//                 y -= sign;
+//             } else {
+//                 return Some((y as f32, collision.unwrap()));
+//             }
+//         }
+//     }
 
-    pub fn is_hit_down(&self) -> bool {
-        self.direction.y > 0.
-    }
-}
-
-pub fn collide(a_pos: Vec2, a_half_size: Vec2, s_pos: Vec2, s_half_size: Vec2) -> Option<Vec2> {
-    let actor_min = a_pos - a_half_size;
-    let actor_max = a_pos + a_half_size;
-    let solid_min = s_pos - s_half_size;
-    let solid_max = s_pos + s_half_size;
-
-    if actor_min.x < solid_max.x
-        && actor_max.x > solid_min.x
-        && actor_min.y < solid_max.y
-        && actor_max.y > solid_min.y
-    {
-        // let overlap = Vec2::new(
-        //     (actor_max.x - solid_min.x).min(solid_max.x - actor_min.x),
-        //     (actor_max.y - solid_min.y).min(solid_max.y - actor_min.y),
-        // );
-
-        let hit = Hit::new(Vec2::new(
-            (actor_max.x - solid_min.x).min(solid_max.x - actor_min.x),
-            (actor_max.y - solid_min.y).min(solid_max.y - actor_min.y),
-        ));
-
-        return Some(hit.direction);
-    }
-
-    return None;
-}
+//     return None;
+// }
