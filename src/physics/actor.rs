@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::collider::Collider;
+use super::Collider;
 
 #[derive(Component)]
 pub struct Actor;
@@ -12,9 +12,9 @@ pub struct ActorBundle {
 }
 
 impl ActorBundle {
-    pub fn new(collider: Collider) -> Self {
+    pub fn new(center: Vec2, half_size: Vec2) -> Self {
         Self {
-            collider,
+            collider: Collider::new(center, half_size),
             actor: Actor,
         }
     }

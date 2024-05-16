@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use super::actor::Actor;
+use super::*;
 
 #[derive(Component)]
 pub struct Collider {
@@ -22,9 +22,14 @@ impl Collider {
     }
 }
 
-pub fn update_rect(mut gizmos: Gizmos, mut query: Query<(&mut Collider, &Transform), With<Actor>>) {
-    for (mut collider, transform) in &mut query {
-        collider.update_rect(transform.translation.xy());
+pub fn update_rect(
+    mut gizmos: Gizmos,
+    mut query: Query<(&mut Collider, &Transform, Option<&Actor>)>,
+) {
+    for (mut collider, transform, actor) in &mut query {
+        if actor.is_some() {
+            collider.update_rect(transform.translation.xy());
+        }
 
         gizmos.primitive_2d(
             Rectangle::from_corners(collider.rect.min, collider.rect.max),

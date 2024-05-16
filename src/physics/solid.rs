@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::collider::Collider;
+use super::Collider;
 
 #[derive(Component)]
 pub struct Solid;
@@ -12,7 +12,9 @@ pub struct SolidBundle {
 }
 
 impl SolidBundle {
-    pub fn new(collider: Collider) -> Self {
+    pub fn new(center: Vec2, half_size: Vec2) -> Self {
+        let collider = Collider::new(center, half_size);
+
         Self {
             solid: Solid,
             collider,

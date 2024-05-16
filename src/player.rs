@@ -1,6 +1,9 @@
-use bevy::{math::bounding::Aabb2d, prelude::*};
+use bevy::{
+    math::bounding::{Aabb2d, BoundingVolume, IntersectsVolume},
+    prelude::*,
+};
 
-use crate::physics::{actor::*, collider::*, solid::*};
+use crate::physics::*;
 
 #[derive(Component)]
 pub struct Player {
@@ -22,20 +25,18 @@ pub struct PlayerBundle {
 }
 
 impl PlayerBundle {
-    pub fn new(texture: Handle<Image>) -> Self {
-        let sprite = SpriteBundle {
-            texture,
-            ..default()
-        };
-
-        let pos = sprite.transform.translation.xy();
-        let collider = Collider::new(pos, Vec2::new(8. / 2., 16. / 2.));
+    pub fn new(transform: Transform, texture: Handle<Image>) -> Self {
+        let center = transform.translation.xy();
 
         Self {
-            sprite,
+            sprite: SpriteBundle {
+                texture,
+                transform,
+                ..default()
+            },
             name: Name::new("Player"),
             player: Player::default(),
-            actor: ActorBundle::new(collider),
+            actor: ActorBundle::new(center, Vec2::new(8. / 2., 16. / 2.)),
         }
     }
 }
@@ -64,49 +65,56 @@ pub fn movement(time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, mut player: Qu
         return;
     };
 
-    let axis = get_input_axis(&keys, KeyCode::ArrowRight, KeyCode::ArrowLeft);
+    let x_axis = get_input_axis(&keys, KeyCode::ArrowRight, KeyCode::ArrowLeft);
+    let y_axis = get_input_axis(&keys, KeyCode::ArrowUp, KeyCode::ArrowDown);
 
     let delta = time.delta_seconds();
 
-    // println!("{:?} {:?} {:?}", player.speed.x, SPEED * axis, ACC * delta);
-    player.speed.x = approach(player.speed.x, SPEED * axis * delta, ACC * delta);
-    player.speed.y = approach(player.speed.y, FALL_SPEED * delta, GRAVITY * delta);
+    player.speed.x = 75. * x_axis * delta;
+    player.speed.y = 75. * y_axis * delta;
 
-    if keys.pressed(KeyCode::KeyC) {
-        player.speed.y = JUMP_SPEED * delta;
-    }
+    // player.speed.x = approach(player.speed.x, SPEED * x_axis * delta, ACC * delta);
+    // player.speed.y = approach(player.speed.y, FALL_SPEED * delta, GRAVITY * delta);
+
+    // if keys.pressed(KeyCode::KeyC) {
+    //     player.speed.y = JUMP_SPEED * delta;
+    // }
 }
 
 pub fn collision_system(
     mut player: Query<(&mut Transform, &mut Player, &Collider), With<Player>>,
-    mut solids: Query<&Collider, (With<Solid>, Without<Player>)>,
+    solids: Query<&Collider, (With<Solid>, Without<Player>)>,
 ) {
-    let Ok((mut p_transform, mut player, p_collider)) = player.get_single_mut() else {
+    let Ok((mut p_trans, mut player, p_col)) = player.get_single_mut() else {
         return;
     };
 
     let speed = player.speed.round();
 
-    for s_collider in &mut solids {
-        let Some((e1, e2)) = get_toc_entries(&p_collider.rect, &s_collider.rect, speed) else {
-            p_transform.translation.x += speed.x;
-            p_transform.translation.y += speed.y;
-            continue;
+    for s_col in &solids {
+        let Some((e1, e2)) = get_toc_entries(&p_col.rect, &s_col.rect, speed) else {
+            p_trans.translation.x += speed.x;
+            p_trans.translation.y += speed.y;
+            break;
         };
 
         let toc = e1.max(e2);
         let collision_axis = collision_direction(e1, e2, speed);
 
+        // println!("{:?}, {:?}", (e1, e2), toc);
+
         if collision_axis.y != 0. {
-            p_transform.translation.x += speed.x;
-            p_transform.translation.y += speed.y * toc;
+            p_trans.translation.x += speed.x;
+            p_trans.translation.y += speed.y * toc;
             player.speed.y = 0.;
+            break;
         }
 
         if collision_axis.x != 0. {
-            p_transform.translation.y += speed.y;
-            p_transform.translation.x += speed.x * toc;
+            p_trans.translation.y += speed.y;
+            p_trans.translation.x += speed.x * toc;
             player.speed.x = 0.;
+            break;
         }
     }
 }
@@ -153,6 +161,10 @@ fn collision_direction(x_entry: f32, y_entry: f32, speed: Vec2) -> Vec2 {
             Vec2 { x: 0.0, y: -1.0 } // Collision on the negative Y axis
         }
     }
+}
+
+fn aabb_collision(a: Aabb2d, b: Aabb2d) -> bool {
+    a.min.x <= b.max.x && a.max.x >= b.min.x && a.min.y <= b.max.y && a.max.y >= b.min.y
 }
 
 // pub fn move_y(amount: f32, collides_at: impl Fn(f32) -> Option<Vec2>) -> Option<(f32, Vec2)> {
