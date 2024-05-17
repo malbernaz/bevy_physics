@@ -26,16 +26,18 @@ pub fn update_rect(
     mut gizmos: Gizmos,
     mut query: Query<(&mut Collider, &Transform, Option<&Actor>)>,
 ) {
+    let mut color = Color::rgb(0., 1., 0.);
     for (mut collider, transform, actor) in &mut query {
         if actor.is_some() {
             collider.update_rect(transform.translation.xy());
+            color = Color::rgb(0., 0., 1.);
         }
 
         gizmos.primitive_2d(
             Rectangle::from_corners(collider.rect.min, collider.rect.max),
             collider.rect.center(),
             0.,
-            Color::rgb(0., 1., 0.),
+            color,
         );
     }
 }

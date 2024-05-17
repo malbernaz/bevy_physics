@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::Collider;
+use super::*;
 
 #[derive(Component)]
 pub struct Solid;

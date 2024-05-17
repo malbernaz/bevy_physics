@@ -1,6 +1,6 @@
-use bevy::prelude::*;
+use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
-use bevy_editor_pls::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 mod physics;
 mod player;
@@ -11,7 +11,8 @@ fn main() {
         .insert_resource(LevelSelection::index(0))
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins(LdtkPlugin)
-        .add_plugins(EditorPlugin::default())
+        .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .add_systems(Startup, systems::setup)
         .add_systems(
             Update,
@@ -19,12 +20,9 @@ fn main() {
                 systems::spawn_tile_collisions,
                 systems::spawn_player,
                 player::movement,
-                player::collision_system,
-                physics::update_rect,
-            )
-                .chain(),
+                (player::collision_system, physics::update_rect).chain(),
+            ),
         )
-        // .add_systems(FixedUpdate, player::collision_system)
         .register_ldtk_int_cell::<systems::TileBundle>(1)
         .run();
 }

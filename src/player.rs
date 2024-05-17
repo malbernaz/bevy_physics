@@ -1,18 +1,19 @@
-use bevy::{
-    math::bounding::{Aabb2d, BoundingVolume, IntersectsVolume},
-    prelude::*,
-};
+use bevy::{math::bounding::*, prelude::*};
 
 use crate::physics::*;
 
 #[derive(Component)]
 pub struct Player {
     speed: Vec2,
+    remainder: Vec2,
 }
 
 impl Default for Player {
     fn default() -> Self {
-        Self { speed: Vec2::ZERO }
+        Self {
+            speed: Vec2::ZERO,
+            remainder: Vec2::ZERO,
+        }
     }
 }
 
@@ -54,34 +55,38 @@ pub fn approach(value: f32, target: f32, delta: f32) -> f32 {
     target.min(value + delta)
 }
 
-const SPEED: f32 = 200.;
-const ACC: f32 = 8.;
+const SPEED: f32 = 150.;
+const ACC: f32 = 10.;
 const GRAVITY: f32 = 10.;
-const FALL_SPEED: f32 = -1000.;
-const JUMP_SPEED: f32 = 200.;
+const FALL_SPEED: f32 = -400.;
+const JUMP_SPEED: f32 = 300.;
 
-pub fn movement(time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, mut player: Query<&mut Player>) {
+pub fn movement(keys: Res<ButtonInput<KeyCode>>, mut player: Query<&mut Player>) {
     let Ok(mut player) = player.get_single_mut() else {
         return;
     };
 
     let x_axis = get_input_axis(&keys, KeyCode::ArrowRight, KeyCode::ArrowLeft);
-    let y_axis = get_input_axis(&keys, KeyCode::ArrowUp, KeyCode::ArrowDown);
+    let _y_axis = get_input_axis(&keys, KeyCode::ArrowUp, KeyCode::ArrowDown);
 
-    let delta = time.delta_seconds();
+    player.speed.x = approach(player.speed.x, SPEED * x_axis, ACC);
+    player.speed.y = approach(player.speed.y, FALL_SPEED, GRAVITY);
 
-    player.speed.x = 75. * x_axis * delta;
-    player.speed.y = 75. * y_axis * delta;
+    if keys.just_pressed(KeyCode::KeyC) {
+        player.speed.y = JUMP_SPEED;
+    }
 
-    // player.speed.x = approach(player.speed.x, SPEED * x_axis * delta, ACC * delta);
-    // player.speed.y = approach(player.speed.y, FALL_SPEED * delta, GRAVITY * delta);
+    player.speed;
+}
 
-    // if keys.pressed(KeyCode::KeyC) {
-    //     player.speed.y = JUMP_SPEED * delta;
-    // }
+pub fn aabb_from_movement(rect: Aabb2d, movement: Vec2) -> Aabb2d {
+    let center = rect.center();
+    let half_size = rect.half_size();
+    Aabb2d::new(center + movement, half_size)
 }
 
 pub fn collision_system(
+    time: Res<Time>,
     mut player: Query<(&mut Transform, &mut Player, &Collider), With<Player>>,
     solids: Query<&Collider, (With<Solid>, Without<Player>)>,
 ) {
@@ -89,100 +94,83 @@ pub fn collision_system(
         return;
     };
 
-    let speed = player.speed.round();
+    let delta = time.delta_seconds();
 
-    for s_col in &solids {
-        let Some((e1, e2)) = get_toc_entries(&p_col.rect, &s_col.rect, speed) else {
-            p_trans.translation.x += speed.x;
-            p_trans.translation.y += speed.y;
-            break;
-        };
+    'x_move: {
+        let amount_x = player.speed.x * delta;
+        player.remainder.x += amount_x;
+        let mut move_x = player.remainder.x as i32;
 
-        let toc = e1.max(e2);
-        let collision_axis = collision_direction(e1, e2, speed);
+        if move_x != 0 {
+            player.remainder.x -= move_x as f32;
+            let sign = move_x.signum();
 
-        // println!("{:?}, {:?}", (e1, e2), toc);
+            while move_x != 0 {
+                let next_rect = aabb_from_movement(p_col.rect, Vec2::new(move_x as f32, 0.))
+                    // don't bother for collisions on y
+                    .shrink(Vec2::new(0., 1.));
+                let will_collide = solids
+                    .iter()
+                    .map(|s| s.rect)
+                    .find(|&s_rect| next_rect.intersects(&s_rect));
 
-        if collision_axis.y != 0. {
-            p_trans.translation.x += speed.x;
-            p_trans.translation.y += speed.y * toc;
-            player.speed.y = 0.;
-            break;
+                if let Some(s_rect) = will_collide {
+                    let u_diff = (p_col.rect.max.x - s_rect.min.x).abs();
+                    let d_diff = (p_col.rect.min.x - s_rect.max.x).abs();
+                    let diff = u_diff.min(d_diff) * sign as f32;
+
+                    if diff != 0. {
+                        p_trans.translation.x += diff;
+                    }
+
+                    player.speed.x = 0.;
+                    player.remainder.x = 0.;
+
+                    break;
+                }
+
+                p_trans.translation.x += sign as f32;
+                move_x -= sign;
+            }
         }
+    }
 
-        if collision_axis.x != 0. {
-            p_trans.translation.y += speed.y;
-            p_trans.translation.x += speed.x * toc;
-            player.speed.x = 0.;
-            break;
+    'moveY: {
+        let amount_y = player.speed.y * delta;
+        player.remainder.y += amount_y;
+        let mut move_y = player.remainder.y as i32;
+
+        if move_y != 0 {
+            player.remainder.y -= move_y as f32;
+            let sign = move_y.signum();
+
+            while move_y != 0 {
+                let next_rect = aabb_from_movement(p_col.rect, Vec2::new(0., move_y as f32))
+                    // don't bother for collisions on x
+                    .shrink(Vec2::new(1., 0.));
+                let will_collide = solids
+                    .iter()
+                    .map(|s| s.rect)
+                    .find(|&s_rect| next_rect.intersects(&s_rect));
+
+                if let Some(s_rect) = will_collide {
+                    let u_diff = (p_col.rect.max.y - s_rect.min.y).abs();
+                    let d_diff = (p_col.rect.min.y - s_rect.max.y).abs();
+                    let diff = u_diff.min(d_diff) * sign as f32;
+
+                    if diff != 0. {
+                        p_trans.translation.y += diff;
+                    }
+
+                    player.speed.y = 0.;
+                    player.remainder.y = 0.;
+
+                    break;
+                }
+
+                p_trans.translation.y += sign as f32;
+                move_y -= sign;
+            }
         }
     }
 }
-
-/// get time of collision entries
-fn get_toc_entries(a: &Aabb2d, s: &Aabb2d, speed: Vec2) -> Option<(f32, f32)> {
-    let (x_entry, x_exit) = if speed.x > 0.0 {
-        ((s.min.x - a.max.x) / speed.x, (s.max.x - a.min.x) / speed.x)
-    } else if speed.x < 0.0 {
-        ((s.max.x - a.min.x) / speed.x, (s.min.x - a.max.x) / speed.x)
-    } else {
-        (f32::NEG_INFINITY, f32::INFINITY)
-    };
-
-    let (y_entry, y_exit) = if speed.y > 0.0 {
-        ((s.min.y - a.max.y) / speed.y, (s.max.y - a.min.y) / speed.y)
-    } else if speed.y < 0.0 {
-        ((s.max.y - a.min.y) / speed.y, (s.min.y - a.max.y) / speed.y)
-    } else {
-        (f32::NEG_INFINITY, f32::INFINITY)
-    };
-
-    let entry_time = x_entry.max(y_entry);
-    let exit_time = x_exit.min(y_exit);
-
-    if entry_time > exit_time || entry_time < 0.0 || entry_time > 1.0 {
-        None
-    } else {
-        Some((x_entry, y_entry))
-    }
-}
-
-fn collision_direction(x_entry: f32, y_entry: f32, speed: Vec2) -> Vec2 {
-    if x_entry > y_entry {
-        if speed.x > 0.0 {
-            Vec2 { x: 1.0, y: 0.0 } // Collision on the positive X axis
-        } else {
-            Vec2 { x: -1.0, y: 0.0 } // Collision on the negative X axis
-        }
-    } else {
-        if speed.y > 0.0 {
-            Vec2 { x: 0.0, y: 1.0 } // Collision on the positive Y axis
-        } else {
-            Vec2 { x: 0.0, y: -1.0 } // Collision on the negative Y axis
-        }
-    }
-}
-
-fn aabb_collision(a: Aabb2d, b: Aabb2d) -> bool {
-    a.min.x <= b.max.x && a.max.x >= b.min.x && a.min.y <= b.max.y && a.max.y >= b.min.y
-}
-
-// pub fn move_y(amount: f32, collides_at: impl Fn(f32) -> Option<Vec2>) -> Option<(f32, Vec2)> {
-//     let mut y = amount.round() as i32;
-
-//     if y == 0 {
-//         let sign = y.signum();
-
-//         while y != 0 {
-//             let collision = collides_at(y as f32);
-
-//             if collision.is_none() {
-//                 y -= sign;
-//             } else {
-//                 return Some((y as f32, collision.unwrap()));
-//             }
-//         }
-//     }
-
-//     return None;
-// }

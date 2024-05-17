@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.13.2"
-bevy_editor_pls = "0.8.1"
 bevy_ecs_ldtk = { git = "https://github.com/theshortcut/bevy_ecs_ldtk/", branch = "bevy-0.13" }
 bevy_ecs_tilemap = { git = "https://github.com/StarArawn/bevy_ecs_tilemap", branch = "main" }
+bevy-inspector-egui = "0.24.0"
 
 [patch.crates-io]
 bevy_ecs_tilemap = { git = "https://github.com/StarArawn/bevy_ecs_tilemap", brach = "main" }
