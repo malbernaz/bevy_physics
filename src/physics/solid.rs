@@ -9,15 +9,15 @@ pub struct Solid;
 pub struct SolidBundle {
     solid: Solid,
     collider: Collider,
+    transform: TransformBundle,
 }
 
 impl SolidBundle {
-    pub fn new(center: Vec2, half_size: Vec2) -> Self {
-        let collider = Collider::new(center, half_size);
-
+    pub fn new(pos: Vec2, half_size: Vec2) -> Self {
         Self {
             solid: Solid,
-            collider,
+            transform: TransformBundle::from_transform(Transform::from_xyz(pos.x, pos.y, 0.)),
+            collider: Collider::new(pos, half_size),
         }
     }
 }

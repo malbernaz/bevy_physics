@@ -176,18 +176,15 @@ pub fn spawn_tile_collisions(
             // 1. Adjusts the transforms to be relative to the level for free
             // 2. the colliders will be despawned automatically when levels unload
             for tile_rect in tile_rects {
-                let transform = TransformBundle::from_transform(Transform::from_xyz(
+                let pos = Vec2::new(
                     (tile_rect.left + tile_rect.right + 1) as f32 * grid_size as f32 / 2.,
                     (tile_rect.bottom + tile_rect.top + 1) as f32 * grid_size as f32 / 2.,
-                    0.,
-                ));
-                let center = transform.local.translation.xy();
+                );
 
                 level.spawn((
                     Name::new("TileRect"),
-                    transform,
                     SolidBundle::new(
-                        center,
+                        pos,
                         Vec2::new(
                             (tile_rect.right - tile_rect.left + 1) as f32 * grid_size as f32 / 2.,
                             (tile_rect.top - tile_rect.bottom + 1) as f32 * grid_size as f32 / 2.,
@@ -204,12 +201,11 @@ pub fn spawn_player(
     level_query: Query<Entity, Added<LevelIid>>,
     asset_server: Res<AssetServer>,
 ) {
-    let transform = Transform::from_xyz(20., 64., 0.);
     for level_entity in &level_query {
         commands.entity(level_entity).with_children(|builder| {
-            builder.spawn(PlayerBundle::new(
-                transform,
-                asset_server.load("player.png"),
+            builder.spawn((
+                Name::new("Player"),
+                PlayerBundle::new(asset_server.load("player.png")),
             ));
         });
     }
