@@ -7,17 +7,25 @@ pub struct Solid;
 
 #[derive(Bundle)]
 pub struct SolidBundle {
-    solid: Solid,
-    collider: Collider,
-    transform: TransformBundle,
+    pub solid: Solid,
+    pub collider: Collider,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+    pub visibility: Visibility,
+    pub inherited_visibility: InheritedVisibility,
+    pub view_visibility: ViewVisibility,
 }
 
 impl SolidBundle {
     pub fn new(pos: Vec2, half_size: Vec2) -> Self {
         Self {
             solid: Solid,
-            transform: TransformBundle::from_transform(Transform::from_xyz(pos.x, pos.y, 0.)),
-            collider: Collider::new(pos, half_size),
+            collider: Collider::new(half_size),
+            transform: Transform::from_xyz(pos.x, pos.y, 0.),
+            global_transform: GlobalTransform::default(),
+            visibility: Visibility::default(),
+            inherited_visibility: InheritedVisibility::default(),
+            view_visibility: ViewVisibility::default(),
         }
     }
 }

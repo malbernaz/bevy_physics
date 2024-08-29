@@ -1,16 +1,14 @@
 use bevy::prelude::*;
-use bevy_inspector_egui::prelude::*;
 
-#[derive(Component, Reflect, InspectorOptions)]
-#[reflect(Component, InspectorOptions)]
+#[derive(Component, Reflect, Debug)]
 pub struct Velocity {
-    pub amount: Vec2,
+    pub value: Vec2,
     pub remainder: Vec2,
 }
 
 impl Velocity {
     pub fn get_direction(&self) -> Vec2 {
-        let mut dir = self.amount;
+        let mut dir = self.value;
 
         if dir.x != 0. {
             dir.x = dir.x.signum();
@@ -23,12 +21,12 @@ impl Velocity {
     }
 
     pub fn reset_x(&mut self) {
-        self.amount.x = 0.;
+        self.value.x = 0.;
         self.remainder.x = 0.;
     }
 
     pub fn reset_y(&mut self) {
-        self.amount.y = 0.;
+        self.value.y = 0.;
         self.remainder.y = 0.;
     }
 
@@ -41,7 +39,7 @@ impl Velocity {
 impl Default for Velocity {
     fn default() -> Self {
         Self {
-            amount: Vec2::ZERO,
+            value: Vec2::ZERO,
             remainder: Vec2::ZERO,
         }
     }

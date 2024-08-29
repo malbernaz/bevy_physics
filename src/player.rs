@@ -36,9 +36,6 @@ pub struct PlayerBundle {
     player: Player,
     sprite: Sprite,
     texture: Handle<Image>,
-    visibility: Visibility,
-    inherited_visibility: InheritedVisibility,
-    view_visibility: ViewVisibility,
     actor: ActorBundle,
 }
 
@@ -75,15 +72,15 @@ pub fn handle_input(keys: Res<ButtonInput<KeyCode>>, mut player: Query<(&mut Vel
 
     let x_axis = get_input_axis(&keys, KeyCode::ArrowRight, KeyCode::ArrowLeft);
 
-    velocity.amount.x = approach(
-        velocity.amount.x,
+    velocity.value.x = approach(
+        velocity.value.x,
         player.max_speed * x_axis,
         player.acceleration,
     );
-    velocity.amount.y = approach(velocity.amount.y, player.max_fall_speed, player.gravity);
+    velocity.value.y = approach(velocity.value.y, player.max_fall_speed, player.gravity);
 
     if keys.just_pressed(KeyCode::KeyC) {
-        velocity.amount.y = player.jump_speed;
+        velocity.value.y = player.jump_speed;
     }
 }
 
@@ -103,10 +100,10 @@ pub fn handle_collision(
     {
         if actor_entity.index() == entity.index() {
             match collision_type {
-                CollisionType::Horizontal => {
+                CollisionAxis::Horizontal => {
                     velocity.reset_x();
                 }
-                CollisionType::Vertical => {
+                CollisionAxis::Vertical => {
                     if !keys.just_pressed(KeyCode::KeyC) {
                         velocity.reset_y();
                     }

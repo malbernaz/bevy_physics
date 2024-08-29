@@ -92,7 +92,7 @@ pub fn spawn_tile_collisions(
     }
 
     let ldtk_project = ldtk_project_assets
-        .get(asset_server.load("level.ldtk"))
+        .get(&asset_server.load("level.ldtk"))
         .expect("Project should be loaded if level has spawned");
 
     for (level_entity, level_iid) in &level_query {
