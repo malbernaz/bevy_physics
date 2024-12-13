@@ -4,10 +4,10 @@ use bevy_inspector_egui::prelude::*;
 use crate::physics::*;
 
 const VELOCITY: f32 = 150.;
-const ACC: f32 = 10.;
-const GRAVITY: f32 = 10.;
+const ACC: f32 = 1000.;
+const GRAVITY: f32 = 1000.;
 const FALL_VELOCITY: f32 = -400.;
-const JUMP_VELOCITY: f32 = 300.;
+const JUMP_VELOCITY: f32 = 250.;
 
 #[derive(Component, Reflect, InspectorOptions)]
 #[reflect(Component, InspectorOptions)]
@@ -41,7 +41,7 @@ pub struct PlayerBundle {
 
 impl PlayerBundle {
     pub fn new(texture: Handle<Image>) -> Self {
-        let transform = Transform::from_xyz(20., 56., 0.);
+        let transform = Transform::from_xyz(20., 60., 0.);
 
         Self {
             texture,
@@ -65,19 +65,29 @@ pub fn approach(value: f32, target: f32, delta: f32) -> f32 {
     }
 }
 
-pub fn handle_input(keys: Res<ButtonInput<KeyCode>>, mut player: Query<(&mut Velocity, &Player)>) {
+pub fn handle_input(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut player: Query<(&mut Velocity, &Player)>,
+) {
     let Ok((mut velocity, player)) = player.get_single_mut() else {
         return;
     };
+
+    let delta = time.delta_seconds();
 
     let x_axis = get_input_axis(&keys, KeyCode::ArrowRight, KeyCode::ArrowLeft);
 
     velocity.value.x = approach(
         velocity.value.x,
         player.max_speed * x_axis,
-        player.acceleration,
+        player.acceleration * delta,
     );
-    velocity.value.y = approach(velocity.value.y, player.max_fall_speed, player.gravity);
+    velocity.value.y = approach(
+        velocity.value.y,
+        player.max_fall_speed,
+        player.gravity * delta,
+    );
 
     if keys.just_pressed(KeyCode::KeyC) {
         velocity.value.y = player.jump_speed;
@@ -85,7 +95,6 @@ pub fn handle_input(keys: Res<ButtonInput<KeyCode>>, mut player: Query<(&mut Vel
 }
 
 pub fn handle_collision(
-    keys: Res<ButtonInput<KeyCode>>,
     mut ev_collision: EventReader<CollisionEvent>,
     mut player: Query<(&mut Velocity, Entity), With<Player>>,
 ) {
@@ -104,9 +113,7 @@ pub fn handle_collision(
                     velocity.reset_x();
                 }
                 CollisionAxis::Vertical => {
-                    if !keys.just_pressed(KeyCode::KeyC) {
-                        velocity.reset_y();
-                    }
+                    velocity.reset_y();
                 }
             };
         }

@@ -29,41 +29,75 @@ impl ActorBundle {
     }
 }
 
-pub fn move_actor(
+pub fn calculate_actor_movement(
     time: Res<Time>,
     mut ev_collision: EventWriter<CollisionEvent>,
-    mut actor: Query<(Entity, &Collider, &mut Velocity, &mut Transform), With<Actor>>,
+    mut actor: Query<
+        (
+            Entity,
+            &Collider,
+            &SeparationRay,
+            &mut Velocity,
+            &mut Transform,
+        ),
+        With<Actor>,
+    >,
     solids: Query<(&Collider, &Transform), (With<Solid>, Without<Actor>)>,
 ) {
-    for (entity, collider, mut velocity, mut transform) in &mut actor {
+    for (entity, collider, ray, mut velocity, mut transform) in &mut actor {
         let delta = time.delta_seconds();
         let dir = velocity.get_direction();
 
-        //--------------move x--------------//
-        let amount_x = velocity.value.x * delta;
+        let amount_f = velocity.value * delta;
+        velocity.remainder += amount_f;
+        let mut amount_i = velocity.remainder.as_ivec2();
+        velocity.remainder -= amount_i.as_vec2();
 
-        velocity.remainder.x += amount_x;
-        let mut move_x = velocity.remainder.x as i32;
-        velocity.remainder.x -= move_x as f32;
+        // move x
+        loop {
+            if ray.direction.x != 0. {
+                let ray_collision = solids.iter().find(|(solid_collider, solid_translation)| {
+                    ray.collides(
+                        transform.translation.xy() + vec2(amount_i.x as f32, 0.),
+                        solid_collider,
+                        solid_translation.translation.xy(),
+                    )
+                });
 
-        while move_x != 0 {
-            let will_collide = solids.iter().find(|(solid_collider, solid_translation)| {
+                if let Some((solid_collider, solid_transform)) = ray_collision {
+                    let collider_aabb = solid_collider.aabb(solid_transform.translation.xy());
+
+                    transform.translation.x = if ray.direction.x.is_sign_positive() {
+                        collider_aabb.min.x - ray.length
+                    } else {
+                        collider_aabb.max.x + ray.length
+                    };
+
+                    ev_collision.send(CollisionEvent {
+                        entity,
+                        collision_type: CollisionAxis::Horizontal,
+                    });
+
+                    break;
+                }
+            }
+
+            let aabb_collision = solids.iter().find(|(solid_collider, solid_transform)| {
                 collider.collides(
-                    transform.translation.xy() + vec2(move_x as f32, 0.),
+                    transform.translation.xy() + vec2(amount_i.x as f32, 0.),
                     solid_collider,
-                    solid_translation.translation.xy(),
+                    solid_transform.translation.xy(),
                 )
             });
 
-            if let Some((solid_collider, solid_translation)) = will_collide {
-                // correct remaining distance to be traversed
-                let diff = collider.min_diff(
-                    transform.translation.xy(),
-                    solid_collider,
-                    solid_translation.translation.xy(),
-                ) * dir;
+            if let Some((solid_collider, solid_transform)) = aabb_collision {
+                let collider_aabb = solid_collider.aabb(solid_transform.translation.xy());
 
-                transform.translation.x += diff.x;
+                transform.translation.x = if dir.x.is_sign_positive() {
+                    collider_aabb.min.x - collider.half_size.x
+                } else {
+                    collider_aabb.max.x + collider.half_size.x
+                };
 
                 ev_collision.send(CollisionEvent {
                     entity,
@@ -73,35 +107,59 @@ pub fn move_actor(
                 break;
             }
 
-            transform.translation.x += dir.x;
+            if amount_i.x == 0 {
+                break;
+            }
 
-            move_x -= dir.x as i32;
+            transform.translation.x += dir.x;
+            amount_i.x -= dir.x as i32;
         }
 
-        //--------------move y--------------//
-        let amount_y = velocity.value.y * delta;
-        velocity.remainder.y += amount_y;
-        let mut move_y = velocity.remainder.y as i32;
-        velocity.remainder.y -= move_y as f32;
+        // move y
+        loop {
+            if ray.direction.y != 0. {
+                let ray_collision = solids.iter().find(|(solid_collider, solid_transform)| {
+                    ray.collides(
+                        transform.translation.xy() + vec2(0., amount_i.y as f32),
+                        solid_collider,
+                        solid_transform.translation.xy(),
+                    )
+                });
 
-        while move_y != 0 {
-            let will_collide = solids.iter().find(|(solid_collider, solid_transform)| {
+                if let Some((solid_collider, solid_transform)) = ray_collision {
+                    let collider_aabb = solid_collider.aabb(solid_transform.translation.xy());
+
+                    transform.translation.y = if ray.direction.y.is_sign_positive() {
+                        collider_aabb.min.y - ray.length
+                    } else {
+                        collider_aabb.max.y + ray.length
+                    };
+
+                    ev_collision.send(CollisionEvent {
+                        entity,
+                        collision_type: CollisionAxis::Vertical,
+                    });
+
+                    break;
+                }
+            }
+
+            let aabb_collision = solids.iter().find(|(solid_collider, solid_transform)| {
                 collider.collides(
-                    transform.translation.xy() + vec2(0., move_y as f32),
+                    transform.translation.xy() + vec2(0., amount_i.y as f32),
                     solid_collider,
                     solid_transform.translation.xy(),
                 )
             });
 
-            if let Some((solid_collider, solid_transform)) = will_collide {
-                // correct remaining distance to be traversed
-                let diff = collider.min_diff(
-                    transform.translation.xy(),
-                    solid_collider,
-                    solid_transform.translation.xy(),
-                ) * dir;
+            if let Some((solid_collider, solid_transform)) = aabb_collision {
+                let collider_aabb = solid_collider.aabb(solid_transform.translation.xy());
 
-                transform.translation.y += diff.y;
+                transform.translation.y = if dir.y.is_sign_positive() {
+                    collider_aabb.min.y - collider.half_size.y
+                } else {
+                    collider_aabb.max.y + collider.half_size.y
+                };
 
                 ev_collision.send(CollisionEvent {
                     entity,
@@ -111,9 +169,12 @@ pub fn move_actor(
                 break;
             }
 
-            transform.translation.y += dir.y;
+            if amount_i.y == 0 {
+                break;
+            }
 
-            move_y -= dir.y as i32;
+            transform.translation.y += dir.y;
+            amount_i.y -= dir.y as i32;
         }
     }
 }

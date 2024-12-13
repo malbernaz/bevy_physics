@@ -26,9 +26,10 @@ fn main() {
             (
                 systems::spawn_tile_collisions,
                 systems::spawn_player,
-                player::handle_input,
                 player::handle_collision,
-            ),
+                player::handle_input,
+            )
+                .chain(),
         )
         .run();
 }

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-#[derive(Component, Reflect, Debug)]
+#[derive(Component, Reflect, Default, Debug)]
 pub struct Velocity {
     pub value: Vec2,
     pub remainder: Vec2,
@@ -8,7 +8,7 @@ pub struct Velocity {
 
 impl Velocity {
     pub fn get_direction(&self) -> Vec2 {
-        let mut dir = self.value;
+        let mut dir = self.value.ceil();
 
         if dir.x != 0. {
             dir.x = dir.x.signum();
@@ -20,27 +20,15 @@ impl Velocity {
         dir
     }
 
+    #[inline]
     pub fn reset_x(&mut self) {
         self.value.x = 0.;
         self.remainder.x = 0.;
     }
 
+    #[inline]
     pub fn reset_y(&mut self) {
         self.value.y = 0.;
         self.remainder.y = 0.;
-    }
-
-    pub fn reset(&mut self) {
-        self.reset_x();
-        self.reset_y();
-    }
-}
-
-impl Default for Velocity {
-    fn default() -> Self {
-        Self {
-            value: Vec2::ZERO,
-            remainder: Vec2::ZERO,
-        }
     }
 }

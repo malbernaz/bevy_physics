@@ -1,8 +1,5 @@
 use bevy::{
-    math::{
-        bounding::{Aabb2d, IntersectsVolume},
-        vec2,
-    },
+    math::bounding::{Aabb2d, IntersectsVolume},
     prelude::*,
 };
 
@@ -52,19 +49,6 @@ impl Collider {
             && aabb.max.y > other_aabb.min.y
     }
 
-    /// gets the minimal distance between the sides of the rect
-    pub fn min_diff(&self, position: Vec2, other: &Self, other_position: Vec2) -> Vec2 {
-        let aabb = self.aabb(position);
-        let other_aabb = other.aabb(other_position);
-
-        let top_diff = (aabb.max.y - other_aabb.min.y).abs();
-        let right_diff = (aabb.max.x - other_aabb.min.x).abs();
-        let bottom_diff = (aabb.min.y - other_aabb.max.y).abs();
-        let left_diff = (aabb.min.x - other_aabb.max.x).abs();
-
-        vec2(right_diff.min(left_diff), top_diff.min(bottom_diff))
-    }
-
     pub fn get_collision_side(
         &self,
         position: Vec2,
@@ -107,18 +91,11 @@ pub fn draw_collider_gizmos(
             Color::srgb(0., 1., 0.)
         };
 
-        let h_size = collider.half_size;
-        let size = h_size * 2.0;
-
-        let center = transform.translation.xy();
-
-        if actor.is_some() {
-            gizmos.line_2d(center, vec2(center.x, center.y + h_size.y), color);
-            gizmos.line_2d(center, vec2(center.x + h_size.x, center.y), color);
-            gizmos.line_2d(center, vec2(center.x, center.y - h_size.y), color);
-            gizmos.line_2d(center, vec2(center.x - h_size.x, center.y), color);
-        } else {
-            gizmos.primitive_2d(&Rectangle::new(size.x, size.y), center, 0., color);
-        }
+        gizmos.primitive_2d(
+            &Rectangle::from_size(collider.half_size * 2.0),
+            transform.translation.xy(),
+            0.,
+            color,
+        );
     }
 }

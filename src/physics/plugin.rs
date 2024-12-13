@@ -19,16 +19,16 @@ impl Plugin for PhysicsPlugin {
             .register_type::<Velocity>()
             .add_event::<CollisionEvent>()
             .configure_sets(
-                FixedUpdate,
+                Update,
                 (Physics::Sync, Physics::Simulation, Physics::Debug)
                     .chain()
                     .before(TransformSystem::TransformPropagate),
             )
             .add_systems(
-                FixedUpdate,
+                Update,
                 (
                     update_actor_grounded.in_set(Physics::Sync),
-                    move_actor.in_set(Physics::Simulation),
+                    calculate_actor_movement.in_set(Physics::Simulation),
                 ),
             );
     }
@@ -38,6 +38,9 @@ pub struct PhysicsDebugPlugin;
 
 impl Plugin for PhysicsDebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, draw_collider_gizmos.in_set(Physics::Debug));
+        app.add_systems(
+            Update,
+            (draw_collider_gizmos, draw_separation_ray_gizmos).in_set(Physics::Debug),
+        );
     }
 }
