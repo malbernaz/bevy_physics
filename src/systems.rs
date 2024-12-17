@@ -206,7 +206,6 @@ pub fn spawn_player(
             builder.spawn((
                 Name::new("Player"),
                 PlayerBundle::new(asset_server.load("player.png")),
-                SeparationRay::new(Dir2::SOUTH, 12.),
             ));
         });
     }

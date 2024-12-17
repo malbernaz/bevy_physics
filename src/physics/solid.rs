@@ -20,7 +20,7 @@ impl SolidBundle {
     pub fn new(pos: Vec2, half_size: Vec2) -> Self {
         Self {
             solid: Solid,
-            collider: Collider::new(half_size),
+            collider: Collider::aabb(half_size),
             transform: Transform::from_xyz(pos.x, pos.y, 0.),
             global_transform: GlobalTransform::default(),
             visibility: Visibility::default(),

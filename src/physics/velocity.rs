@@ -7,15 +7,12 @@ pub struct Velocity {
 }
 
 impl Velocity {
+    // returns sign and removes negative sign from 0
     pub fn get_direction(&self) -> Vec2 {
-        let mut dir = self.value.ceil();
+        let mut dir = self.value;
 
-        if dir.x != 0. {
-            dir.x = dir.x.signum();
-        }
-        if dir.y != 0. {
-            dir.y = dir.y.signum();
-        }
+        dir.x = if dir.x == -0. { 0. } else { dir.x.signum() };
+        dir.y = if dir.y == -0. { 0. } else { dir.y.signum() };
 
         dir
     }

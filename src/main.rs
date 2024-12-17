@@ -26,7 +26,8 @@ fn main() {
             (
                 systems::spawn_tile_collisions,
                 systems::spawn_player,
-                player::handle_collision,
+                (player::update_player_grounded, player::handle_collision)
+                    .in_set(physics::Physics::Simulation),
                 player::handle_input,
             )
                 .chain(),

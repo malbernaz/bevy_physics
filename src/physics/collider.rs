@@ -1,101 +1,96 @@
-use bevy::{
-    math::bounding::{Aabb2d, IntersectsVolume},
-    prelude::*,
-};
+use bevy::{math::bounding::Aabb2d, prelude::*};
+use std::sync::Arc;
 
 use super::*;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum CollisionAxis {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum CollisionSide {
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
-#[derive(Event)]
+#[derive(Event, Debug)]
 pub struct CollisionEvent {
     pub entity: Entity,
-    pub collision_type: CollisionAxis,
+    pub direction: Cardinal,
+    pub solid: Aabb2d,
 }
 
-#[derive(Component, Reflect, Default, Clone, Copy)]
-pub struct Collider {
-    pub half_size: Vec2,
+#[derive(Clone)]
+pub enum TypedShape {
+    Aabb(Aabb),
+    Ray(RayCast),
+    Custom(CustomCollider),
+    None,
+}
+
+pub trait Shape: Send + Sync {
+    fn collides(&self, position: Vec2, aabb: &Aabb2d) -> bool;
+
+    fn get_collision_side(&self, position: Vec2, aabb: &Aabb2d) -> Option<Cardinal>;
+
+    fn draw_gizmo(&self, gizmos: &mut Gizmos, position: Vec2, color: Color);
+
+    fn as_typed_shape(&self) -> TypedShape {
+        TypedShape::None
+    }
+}
+
+#[derive(Clone, Deref)]
+pub struct SharedShape(pub Arc<dyn Shape>);
+
+impl SharedShape {
+    pub fn new(shape: impl Shape + 'static) -> Self {
+        Self(Arc::new(shape))
+    }
+
+    pub fn aabb(half_size: Vec2) -> Self {
+        Self::new(Aabb::new(half_size))
+    }
+
+    pub fn ray_cast(direction: Cardinal, length: f32) -> Self {
+        Self::new(RayCast::new(direction, length))
+    }
+
+    pub fn custom(shape: impl Shape + 'static) -> Self {
+        Self::new(CustomCollider::new(shape))
+    }
+}
+
+#[derive(Component, Clone, Deref)]
+pub struct Collider(pub SharedShape);
+
+impl Default for Collider {
+    fn default() -> Self {
+        Self::aabb(Vec2::splat(1.))
+    }
 }
 
 impl Collider {
-    pub fn new(half_size: Vec2) -> Self {
-        Self { half_size }
+    pub fn new(shape: SharedShape) -> Self {
+        Self(shape)
     }
 
-    pub fn aabb(&self, position: Vec2) -> Aabb2d {
-        Aabb2d::new(position, self.half_size)
+    pub fn aabb(half_size: Vec2) -> Self {
+        Self::new(SharedShape::aabb(half_size))
     }
 
-    pub fn collides(&self, position: Vec2, other: &Self, other_position: Vec2) -> bool {
-        let aabb = self.aabb(position);
-        let other_aabb = other.aabb(other_position);
-
-        aabb.min.x < other_aabb.max.x
-            && aabb.max.x > other_aabb.min.x
-            && aabb.min.y < other_aabb.max.y
-            && aabb.max.y > other_aabb.min.y
+    pub fn ray_cast(half_size: Vec2) -> Self {
+        Self::new(SharedShape::aabb(half_size))
     }
 
-    pub fn get_collision_side(
-        &self,
-        position: Vec2,
-        other: &Self,
-        other_position: Vec2,
-    ) -> Option<CollisionSide> {
-        let aabb = self.aabb(position);
-        let other_aabb = other.aabb(other_position);
-
-        if !aabb.intersects(&other_aabb) {
-            return None;
-        }
-
-        let offset = other_aabb.closest_point(position) - position;
-
-        let side = if offset.y.abs() > offset.x.abs() {
-            if offset.y > 0. {
-                CollisionSide::Top
-            } else {
-                CollisionSide::Bottom
-            }
-        } else if offset.x < 0. {
-            CollisionSide::Left
-        } else {
-            CollisionSide::Right
-        };
-
-        Some(side)
+    pub fn custom(shape: impl Shape + 'static) -> Self {
+        Self::new(SharedShape::custom(shape))
     }
 }
 
 pub fn draw_collider_gizmos(
     mut gizmos: Gizmos,
-    query: Query<(&Collider, &Transform, Option<&Actor>)>,
+    query: Query<(&Collider, Option<&Actor>, &Transform)>,
 ) {
-    for (collider, transform, actor) in &query {
-        let color = if actor.is_some() {
-            Color::srgb(0., 0., 1.)
-        } else {
-            Color::srgb(0., 1., 0.)
-        };
-
-        gizmos.primitive_2d(
-            &Rectangle::from_size(collider.half_size * 2.0),
+    for (collider, actor, transform) in &query {
+        collider.draw_gizmo(
+            &mut gizmos,
             transform.translation.xy(),
-            0.,
-            color,
+            if actor.is_some() {
+                Color::srgb(0., 0., 1.)
+            } else {
+                Color::srgb(0., 1., 0.)
+            },
         );
     }
 }

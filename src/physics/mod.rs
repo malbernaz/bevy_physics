@@ -1,10 +1,14 @@
+mod aabb;
 mod actor;
+mod cardinal;
 mod collider;
+mod custom_collider;
 mod plugin;
-mod separation_ray;
+mod ray_cast;
 mod solid;
 mod velocity;
 
 pub use crate::physics::{
-    actor::*, collider::*, plugin::*, separation_ray::*, solid::*, velocity::*,
+    aabb::*, actor::*, cardinal::*, collider::*, custom_collider::*, plugin::*, ray_cast::*,
+    solid::*, velocity::*,
 };
