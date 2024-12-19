@@ -54,7 +54,6 @@ impl Cardinal {
         } else if vec.y < 0. {
             Ok(Cardinal::South)
         } else {
-            println!("here: {vec}");
             Err(())
         }
     }

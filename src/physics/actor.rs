@@ -37,10 +37,6 @@ pub fn simulate_actor_movement(
         let delta = time.delta_seconds();
         let dir = velocity.get_direction();
 
-        if dir == Vec2::ZERO {
-            continue;
-        }
-
         let amount_f = velocity.value * delta;
         velocity.remainder += amount_f;
         let mut amount_i = velocity.remainder.as_ivec2();
@@ -48,12 +44,17 @@ pub fn simulate_actor_movement(
 
         // move x
         'move_x: loop {
+            let dir_offset = vec2(dir.x, 0.);
+
+            if dir == Vec2::ZERO {
+                break;
+            }
+
             for (solid, solid_transform) in &solids {
                 let TypedShape::Aabb(solid) = solid.as_typed_shape() else {
                     break;
                 };
 
-                let dir_offset = vec2(dir.x, 0.);
                 let solid = solid.aabb(solid_transform.translation.xy());
 
                 if collider.collides(transform.translation.xy() + dir_offset, &solid) {
@@ -77,12 +78,17 @@ pub fn simulate_actor_movement(
 
         // move y
         'move_y: loop {
+            let dir_offset = vec2(0., dir.y);
+
+            if dir_offset == Vec2::ZERO {
+                break;
+            }
+
             for (solid, solid_transform) in &solids {
                 let TypedShape::Aabb(solid) = solid.as_typed_shape() else {
                     break;
                 };
 
-                let dir_offset = vec2(0., dir.y);
                 let solid = solid.aabb(solid_transform.translation.xy());
 
                 if collider.collides(transform.translation.xy() + dir_offset, &solid) {
